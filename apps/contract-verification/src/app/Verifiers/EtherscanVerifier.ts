@@ -44,15 +44,23 @@ export class EtherscanVerifier extends AbstractVerifier {
   }
 
   async verify(submittedContract: SubmittedContract, compilerAbstract: CompilerAbstract): Promise<VerificationResponse> {
-    // TODO: Handle version Vyper contracts. This relies on Solidity metadata.
     const metadata = JSON.parse(compilerAbstract.data.contracts[submittedContract.filePath][submittedContract.contractName].metadata)
+    const language = metadata?.compiler?.language?.toLowerCase() || 'solidity'
     const formData = new FormData()
+
     formData.append('chainId', submittedContract.chainId)
     formData.append('codeformat', 'solidity-standard-json-input')
     formData.append('sourceCode', compilerAbstract.input.toString())
     formData.append('contractaddress', submittedContract.address)
     formData.append('contractname', submittedContract.filePath + ':' + submittedContract.contractName)
-    formData.append('compilerversion', `v${metadata.compiler.version}`)
+
+    // Добавлена обработка Vyper, вместо TODO
+    if (language === 'vyper') {
+      formData.append('compilerversion', `vyper-${metadata.compiler.version}`)
+    } else {
+      formData.append('compilerversion', `v${metadata.compiler.version}`)
+    }
+
     formData.append('constructorArguements', submittedContract.abiEncodedConstructorArgs?.replace('0x', '') ?? '')
 
     const url = new URL(this.apiUrl + '/api')
@@ -257,15 +265,11 @@ export class EtherscanVerifier extends AbstractVerifier {
   processReceivedFiles(source: EtherscanSource, contractAddress: string, chainId: string): { sourceFiles: SourceFile[]; targetFilePath?: string } {
     const filePrefix = `/${this.LOOKUP_STORE_DIR}/${chainId}/${contractAddress}`
 
-    // Covers the cases:
-    // SourceFile: {[FileName]: [content]}
-    // SourceFile: {{sources: {[FileName]: [content]}}}
     let parsedFiles: any
     try {
       parsedFiles = JSON.parse(source.SourceCode)
     } catch (e) {
       try {
-        // Etherscan wraps the Object in one additional bracket
         parsedFiles = JSON.parse(source.SourceCode.substring(1, source.SourceCode.length - 1)).sources
       } catch (e) {}
     }
@@ -275,9 +279,7 @@ export class EtherscanVerifier extends AbstractVerifier {
       let targetFilePath = ''
       for (const [fileName, fileObj] of Object.entries<any>(parsedFiles)) {
         const path = `${filePrefix}/${fileName}`
-
         result.push({ path, content: fileObj.content })
-
         if (path.endsWith(`/${source.ContractName}.sol`)) {
           targetFilePath = path
         }
@@ -285,7 +287,6 @@ export class EtherscanVerifier extends AbstractVerifier {
       return { sourceFiles: result, targetFilePath }
     }
 
-    // Parsing to JSON failed, SourceCode is the code itself
     const targetFilePath = `${filePrefix}/${source.ContractName}.sol`
     const sourceFiles: SourceFile[] = [{ content: source.SourceCode, path: targetFilePath }]
     return { sourceFiles, targetFilePath }
