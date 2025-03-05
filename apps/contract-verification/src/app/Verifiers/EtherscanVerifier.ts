@@ -54,7 +54,7 @@ export class EtherscanVerifier extends AbstractVerifier {
     formData.append('contractaddress', submittedContract.address)
     formData.append('contractname', submittedContract.filePath + ':' + submittedContract.contractName)
 
-    // Добавлена обработка Vyper, вместо TODO
+    // Now handle Vyper
     if (language === 'vyper') {
       formData.append('compilerversion', `vyper-${metadata.compiler.version}`)
     } else {
